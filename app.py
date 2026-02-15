@@ -158,15 +158,21 @@ async def process_document(request: Request):
                 doc_request.document_url,
                 doc_request.output_format,
                 doc_request.options,
+                doc_request.mime_type,
             )
 
         if result.status == "error":
-            if "timed out" in (result.error or ""):
+            error_msg = result.error or ""
+            if "timed out" in error_msg:
                 status_code = 504
-            elif "too large" in (result.error or ""):
+            elif "too large" in error_msg:
                 status_code = 413
-            elif "Unsupported" in (result.error or ""):
+            elif "Unsupported" in error_msg or "Invalid GCS URI" in error_msg:
                 status_code = 400
+            elif "not found" in error_msg.lower():
+                status_code = 404
+            elif "Permission denied" in error_msg:
+                status_code = 403
             else:
                 status_code = 500
             return JSONResponse(status_code=status_code, content=result.model_dump(exclude_none=True))

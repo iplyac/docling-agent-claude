@@ -143,3 +143,48 @@ def test_timeout_error(test_client, mock_processor):
         },
     )
     assert response.status_code == 504
+
+
+def test_process_gcs_document(test_client, mock_processor):
+    """Test successful GCS URI document processing."""
+    response = test_client.post(
+        "/api/process-document",
+        json={
+            "document_url": "gs://my-bucket/doc.pdf",
+            "output_format": "markdown",
+        },
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    mock_processor.process_url.assert_called_once()
+
+
+def test_process_gcs_not_found(test_client, mock_processor):
+    """Test GCS blob not found returns 404."""
+    mock_processor.process_url = AsyncMock(
+        return_value=DocumentResponse(
+            status="error",
+            error="GCS blob not found: gs://bucket/missing.pdf",
+        )
+    )
+    response = test_client.post(
+        "/api/process-document",
+        json={"document_url": "gs://bucket/missing.pdf"},
+    )
+    assert response.status_code == 404
+
+
+def test_process_gcs_forbidden(test_client, mock_processor):
+    """Test GCS permission denied returns 403."""
+    mock_processor.process_url = AsyncMock(
+        return_value=DocumentResponse(
+            status="error",
+            error="Permission denied accessing GCS blob: gs://bucket/doc.pdf",
+        )
+    )
+    response = test_client.post(
+        "/api/process-document",
+        json={"document_url": "gs://bucket/doc.pdf"},
+    )
+    assert response.status_code == 403

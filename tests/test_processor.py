@@ -2,7 +2,7 @@
 
 import asyncio
 import base64
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 
@@ -157,3 +157,20 @@ async def test_timeout_handling(processor):
         assert "timed out" in result.error.lower()
     finally:
         os.environ.pop("PROCESSING_TIMEOUT_SECONDS", None)
+
+
+@pytest.mark.asyncio
+async def test_process_url_routes_gcs_to_process_gcs(processor):
+    """Test that process_url routes gs:// URIs to process_gcs."""
+    from agent.models import DocumentResponse, DocumentMetadata
+
+    mock_response = DocumentResponse(
+        status="ok",
+        content="# GCS Doc",
+        metadata=DocumentMetadata(format="markdown", pages=1),
+    )
+    processor.process_gcs = AsyncMock(return_value=mock_response)
+
+    result = await processor.process_url("gs://bucket/doc.pdf")
+    assert result.status == "ok"
+    processor.process_gcs.assert_called_once()

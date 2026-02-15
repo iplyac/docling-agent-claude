@@ -13,6 +13,32 @@ mock_docling.document_converter.DocumentConverter = mock_converter_class
 sys.modules["docling"] = mock_docling
 sys.modules["docling.document_converter"] = mock_docling.document_converter
 
+# Mock GCS and google.api_core.exceptions before any imports
+# The exceptions module must be a real module with real Exception subclasses
+import types
+
+_gcs_exc_module = types.ModuleType("google.api_core.exceptions")
+class _NotFound(Exception):
+    pass
+class _Forbidden(Exception):
+    pass
+_gcs_exc_module.NotFound = _NotFound
+_gcs_exc_module.Forbidden = _Forbidden
+
+_api_core_module = types.ModuleType("google.api_core")
+_api_core_module.exceptions = _gcs_exc_module
+
+# Set up the module hierarchy
+if "google" not in sys.modules:
+    sys.modules["google"] = types.ModuleType("google")
+if "google.cloud" not in sys.modules:
+    sys.modules["google.cloud"] = types.ModuleType("google.cloud")
+if "google.api_core" not in sys.modules:
+    sys.modules["google.api_core"] = _api_core_module
+sys.modules["google.api_core.exceptions"] = _gcs_exc_module
+if "google.cloud.storage" not in sys.modules:
+    sys.modules["google.cloud.storage"] = MagicMock()
+
 
 @pytest.fixture
 def mock_processor():

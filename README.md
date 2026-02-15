@@ -39,6 +39,7 @@ openspec/               # Specifications and change history
 - Python 3.11+
 - `gcloud` CLI (authenticated: `gcloud auth application-default login`)
 - GCP project with Cloud Run API enabled
+- For GCS support: service account with `roles/storage.objectViewer` on the target bucket
 
 ## API Endpoints
 
@@ -72,6 +73,16 @@ Request (URL):
   "output_format": "json"
 }
 ```
+
+Request (GCS):
+```json
+{
+  "document_url": "gs://my-bucket/documents/report.pdf",
+  "output_format": "markdown"
+}
+```
+
+When using `gs://` URIs, the MIME type is auto-detected from GCS blob metadata. The `mime_type` field acts as a fallback if GCS metadata is missing.
 
 Response (success):
 ```json
@@ -172,3 +183,4 @@ Use a standalone terminal application.
 - Requires authentication (`--no-allow-unauthenticated`)
 - API keys/tokens are masked in error messages
 - Document content is never logged
+- GCS access uses Application Default Credentials (service account on Cloud Run)

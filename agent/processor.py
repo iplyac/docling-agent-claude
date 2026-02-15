@@ -9,6 +9,8 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from google.cloud import storage
+from google.api_core import exceptions as gcs_exceptions
 from docling.document_converter import DocumentConverter
 
 from agent.config import get_max_document_size, get_processing_timeout
@@ -131,10 +133,111 @@ class DoclingProcessor:
         document_url: str,
         output_format: OutputFormat = OutputFormat.markdown,
         options: Optional[ProcessingOptions] = None,
+        mime_type: str = "application/pdf",
     ) -> DocumentResponse:
-        """Process a document from URL."""
+        """Process a document from URL or GCS URI."""
         options = options or ProcessingOptions()
+        if document_url.startswith("gs://"):
+            return await self.process_gcs(document_url, output_format, options, mime_type)
         return await self._run_conversion(document_url, output_format, options)
+
+    async def process_gcs(
+        self,
+        gcs_uri: str,
+        output_format: OutputFormat = OutputFormat.markdown,
+        options: Optional[ProcessingOptions] = None,
+        fallback_mime_type: str = "application/pdf",
+    ) -> DocumentResponse:
+        """Process a document from Google Cloud Storage.
+
+        Args:
+            gcs_uri: GCS URI in format gs://bucket/path/to/file.
+            output_format: Desired output format.
+            options: Processing options.
+            fallback_mime_type: MIME type to use if GCS metadata is missing.
+        """
+        options = options or ProcessingOptions()
+
+        # Parse gs://bucket/path
+        uri_body = gcs_uri[len("gs://"):]
+        slash_idx = uri_body.find("/")
+        if slash_idx < 1:
+            return DocumentResponse(
+                status="error",
+                error=f"Invalid GCS URI format: '{gcs_uri}'. Expected gs://bucket/path",
+            )
+        bucket_name = uri_body[:slash_idx]
+        blob_path = uri_body[slash_idx + 1:]
+        if not blob_path:
+            return DocumentResponse(
+                status="error",
+                error=f"Invalid GCS URI format: '{gcs_uri}'. Missing blob path",
+            )
+
+        try:
+            client = storage.Client()
+            bucket = client.bucket(bucket_name)
+            blob = bucket.blob(blob_path)
+            blob.reload()  # Fetch metadata
+        except gcs_exceptions.NotFound:
+            return DocumentResponse(
+                status="error",
+                error=f"GCS blob not found: {gcs_uri}",
+            )
+        except gcs_exceptions.Forbidden:
+            return DocumentResponse(
+                status="error",
+                error=f"Permission denied accessing GCS blob: {gcs_uri}",
+            )
+        except Exception as e:
+            logger.error("GCS metadata error: %s", e)
+            return DocumentResponse(
+                status="error",
+                error="Failed to access GCS blob",
+            )
+
+        # Size check before download
+        max_size = get_max_document_size()
+        if blob.size and blob.size > max_size:
+            max_mb = max_size // (1024 * 1024)
+            return DocumentResponse(
+                status="error",
+                error=f"Document too large (max {max_mb} MB)",
+            )
+
+        # Resolve MIME type from GCS metadata or fallback
+        mime_type = fallback_mime_type
+        if blob.content_type and blob.content_type != "application/octet-stream":
+            mime_type = blob.content_type
+
+        if mime_type not in SUPPORTED_MIME_TYPES:
+            return DocumentResponse(
+                status="error",
+                error=f"Unsupported mime_type '{mime_type}'. Supported: {', '.join(sorted(SUPPORTED_MIME_TYPES))}",
+            )
+
+        # Download to temp file
+        ext = MIME_TO_EXTENSION.get(mime_type, ".bin")
+        try:
+            with tempfile.NamedTemporaryFile(suffix=ext, delete=True) as tmp:
+                blob.download_to_filename(tmp.name)
+                return await self._run_conversion(tmp.name, output_format, options)
+        except gcs_exceptions.NotFound:
+            return DocumentResponse(
+                status="error",
+                error=f"GCS blob not found: {gcs_uri}",
+            )
+        except gcs_exceptions.Forbidden:
+            return DocumentResponse(
+                status="error",
+                error=f"Permission denied accessing GCS blob: {gcs_uri}",
+            )
+        except Exception as e:
+            logger.error("GCS download error: %s", e)
+            return DocumentResponse(
+                status="error",
+                error="Failed to download document from GCS",
+            )
 
     async def _run_conversion(
         self,
