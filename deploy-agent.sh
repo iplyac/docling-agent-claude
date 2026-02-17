@@ -76,8 +76,10 @@ gcloud run deploy "${SERVICE_NAME}" \
     --platform=managed \
     --ingress=internal \
     --no-allow-unauthenticated \
-    --memory=2Gi \
-    --timeout=300 \
+    --memory=4Gi \
+    --cpu=2 \
+    --timeout=600 \
+    --min-instances=1 \
     --set-env-vars="${ENV_VARS}" \
     --quiet
 
