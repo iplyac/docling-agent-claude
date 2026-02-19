@@ -65,9 +65,12 @@ fi
 # --- Deploy ---
 echo "=== Deploying to Cloud Run ==="
 
+GCS_RESULT_BUCKET="${GCS_RESULT_BUCKET:-docling-documents}"
+
 ENV_VARS="GCP_PROJECT_ID=${PROJECT_ID}"
 ENV_VARS="${ENV_VARS},GCP_LOCATION=${REGION}"
 ENV_VARS="${ENV_VARS},LOG_LEVEL=${LOG_LEVEL}"
+ENV_VARS="${ENV_VARS},GCS_RESULT_BUCKET=${GCS_RESULT_BUCKET}"
 
 gcloud run deploy "${SERVICE_NAME}" \
     --project="${PROJECT_ID}" \

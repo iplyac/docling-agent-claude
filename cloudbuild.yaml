@@ -33,17 +33,22 @@ steps:
       - 'internal'
       - '--no-allow-unauthenticated'
       - '--memory'
-      - '2Gi'
+      - '4Gi'
+      - '--cpu'
+      - '2'
       - '--timeout'
-      - '300'
+      - '600'
+      - '--min-instances'
+      - '1'
       - '--set-env-vars'
-      - 'GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=${_REGION},LOG_LEVEL=${_LOG_LEVEL}'
+      - 'GCP_PROJECT_ID=$PROJECT_ID,GCP_LOCATION=${_REGION},LOG_LEVEL=${_LOG_LEVEL},GCS_RESULT_BUCKET=${_GCS_RESULT_BUCKET}'
 
 # Substitution variables
 substitutions:
   _REGION: 'europe-west4'
   _SERVICE_NAME: 'docling-agent'
   _LOG_LEVEL: 'INFO'
+  _GCS_RESULT_BUCKET: 'docling-documents'
 
 # Build options
 options:

@@ -57,4 +57,5 @@ class DocumentResponse(BaseModel):
     status: str  # "ok" or "error"
     content: Optional[str] = None
     metadata: Optional[DocumentMetadata] = None
+    result_gcs_uri: Optional[str] = None
     error: Optional[str] = None

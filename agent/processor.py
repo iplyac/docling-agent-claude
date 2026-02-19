@@ -8,12 +8,13 @@ import tempfile
 import time
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urlparse
 
 from google.cloud import storage
 from google.api_core import exceptions as gcs_exceptions
 from docling.document_converter import DocumentConverter
 
-from agent.config import get_max_document_size, get_processing_timeout
+from agent.config import get_max_document_size, get_processing_timeout, get_result_bucket
 from agent.models import DocumentMetadata, DocumentResponse, OutputFormat, ProcessingOptions
 
 logger = logging.getLogger(__name__)
@@ -31,6 +32,12 @@ SUPPORTED_MIME_TYPES = {
     "image/tiff",
     "image/bmp",
     "image/webp",
+}
+
+FORMAT_TO_EXTENSION = {
+    OutputFormat.markdown: ".md",
+    OutputFormat.json: ".json",
+    OutputFormat.text: ".txt",
 }
 
 MIME_TO_EXTENSION = {
@@ -54,6 +61,42 @@ class DoclingProcessor:
 
     def __init__(self):
         self.converter = DocumentConverter()
+        result_bucket = get_result_bucket()
+        if result_bucket:
+            self._result_bucket = result_bucket
+            self._storage_client = storage.Client()
+        else:
+            self._result_bucket = None
+            self._storage_client = None
+
+    def _derive_result_filename(self, source: str, output_format: OutputFormat) -> str:
+        """Derive result filename from document source."""
+        ext = FORMAT_TO_EXTENSION.get(output_format, ".md")
+        if source.startswith("gs://"):
+            blob_path = source[len("gs://"):].split("/", 1)[-1] if "/" in source[len("gs://"):] else source
+            basename = Path(blob_path).name
+        elif source.startswith("http://") or source.startswith("https://"):
+            basename = Path(urlparse(source).path).name or "document"
+        else:
+            # base64 temp file path or unknown
+            basename = "document"
+        return basename + ext
+
+    def _upload_result(self, content: str, filename: str) -> Optional[str]:
+        """Upload result content to GCS results/ folder. Returns gs:// URI or None on failure."""
+        if not self._storage_client or not self._result_bucket:
+            return None
+        blob_path = f"results/{filename}"
+        try:
+            bucket = self._storage_client.bucket(self._result_bucket)
+            blob = bucket.blob(blob_path)
+            blob.upload_from_string(content, content_type="text/plain; charset=utf-8")
+            uri = f"gs://{self._result_bucket}/{blob_path}"
+            logger.info("Result uploaded: %s", uri)
+            return uri
+        except Exception as e:
+            logger.error("GCS result upload failed: %s", e)
+            return None
 
     def _convert_sync(
         self, source: str, max_pages: Optional[int] = None
@@ -125,7 +168,7 @@ class DoclingProcessor:
             tmp.write(raw_bytes)
             tmp.flush()
             return await self._run_conversion(
-                tmp.name, output_format, options
+                tmp.name, output_format, options, original_source=None
             )
 
     async def process_url(
@@ -139,7 +182,7 @@ class DoclingProcessor:
         options = options or ProcessingOptions()
         if document_url.startswith("gs://"):
             return await self.process_gcs(document_url, output_format, options, mime_type)
-        return await self._run_conversion(document_url, output_format, options)
+        return await self._run_conversion(document_url, output_format, options, original_source=document_url)
 
     async def process_gcs(
         self,
@@ -221,7 +264,7 @@ class DoclingProcessor:
         try:
             with tempfile.NamedTemporaryFile(suffix=ext, delete=True) as tmp:
                 blob.download_to_filename(tmp.name)
-                return await self._run_conversion(tmp.name, output_format, options)
+                return await self._run_conversion(tmp.name, output_format, options, original_source=gcs_uri)
         except gcs_exceptions.NotFound:
             return DocumentResponse(
                 status="error",
@@ -244,8 +287,17 @@ class DoclingProcessor:
         source: str,
         output_format: OutputFormat,
         options: ProcessingOptions,
+        original_source: Optional[str] = None,
     ) -> DocumentResponse:
-        """Run Docling conversion with timeout."""
+        """Run Docling conversion with timeout.
+
+        Args:
+            source: File path or URL to pass to Docling.
+            output_format: Desired output format.
+            options: Processing options.
+            original_source: Original document source (gs:// URI, HTTP URL, or None for base64)
+                             used for result filename derivation.
+        """
         timeout = get_processing_timeout()
         start_time = time.monotonic()
 
@@ -269,13 +321,24 @@ class DoclingProcessor:
                 error="Document processing failed, please try again later",
             )
 
+        try:
+            content = self._format_output(result, output_format)
+            doc_source = original_source or source
+            filename = self._derive_result_filename(doc_source, output_format)
+            result_gcs_uri = self._upload_result(content, filename)
+        except Exception as e:
+            logger.error("Output formatting error: %s", e)
+            return DocumentResponse(
+                status="error",
+                error="Document processing failed, please try again later",
+            )
+
         elapsed_ms = int((time.monotonic() - start_time) * 1000)
 
         try:
-            content = self._format_output(result, output_format)
             metadata = self._extract_metadata(result, output_format, elapsed_ms)
         except Exception as e:
-            logger.error("Output formatting error: %s", e)
+            logger.error("Metadata extraction error: %s", e)
             return DocumentResponse(
                 status="error",
                 error="Document processing failed, please try again later",
@@ -285,4 +348,5 @@ class DoclingProcessor:
             status="ok",
             content=content,
             metadata=metadata,
+            result_gcs_uri=result_gcs_uri,
         )

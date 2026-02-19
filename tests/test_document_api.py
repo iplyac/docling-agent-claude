@@ -188,3 +188,41 @@ def test_process_gcs_forbidden(test_client, mock_processor):
         json={"document_url": "gs://bucket/doc.pdf"},
     )
     assert response.status_code == 403
+
+
+def test_result_gcs_uri_present_in_response(test_client, mock_processor):
+    """Test that result_gcs_uri is included in response when processor returns it."""
+    from agent.models import DocumentMetadata
+
+    mock_processor.process_base64 = AsyncMock(
+        return_value=DocumentResponse(
+            status="ok",
+            content="# Doc",
+            metadata=DocumentMetadata(
+                format="markdown", pages=1, tables_found=0, images_found=0, processing_time_ms=50
+            ),
+            result_gcs_uri="gs://output-bucket/results/doc.pdf.md",
+        )
+    )
+    import base64
+    doc_b64 = base64.b64encode(b"%PDF-1.4 content").decode()
+    response = test_client.post(
+        "/api/process-document",
+        json={"document_base64": doc_b64, "mime_type": "application/pdf"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["result_gcs_uri"] == "gs://output-bucket/results/doc.pdf.md"
+
+
+def test_result_gcs_uri_absent_when_not_set(test_client, mock_processor):
+    """Test that result_gcs_uri is absent from response when processor returns None."""
+    import base64
+    doc_b64 = base64.b64encode(b"%PDF-1.4 content").decode()
+    response = test_client.post(
+        "/api/process-document",
+        json={"document_base64": doc_b64, "mime_type": "application/pdf"},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "result_gcs_uri" not in data

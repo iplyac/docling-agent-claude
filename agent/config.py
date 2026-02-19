@@ -56,3 +56,8 @@ def get_processing_timeout() -> int:
         return int(os.getenv("PROCESSING_TIMEOUT_SECONDS", "300"))
     except (ValueError, TypeError):
         return 300
+
+
+def get_result_bucket() -> Optional[str]:
+    """Return GCS result bucket name, or None if not configured."""
+    return os.getenv("GCS_RESULT_BUCKET") or None
