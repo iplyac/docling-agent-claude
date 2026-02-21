@@ -93,3 +93,14 @@ SERVICE_URL=$(gcloud run services describe "${SERVICE_NAME}" \
     --format="value(status.url)" \
     --quiet)
 echo "Service URL: ${SERVICE_URL}"
+
+# Grant master-agent service account invoker rights (idempotent)
+# master-agent uses the default Compute Engine SA
+MASTER_AGENT_SA="${MASTER_AGENT_SA:-298607833444-compute@developer.gserviceaccount.com}"
+echo "=== Granting invoker role to master-agent SA: ${MASTER_AGENT_SA} ==="
+gcloud run services add-iam-policy-binding "${SERVICE_NAME}" \
+    --project="${PROJECT_ID}" \
+    --region="${REGION}" \
+    --member="serviceAccount:${MASTER_AGENT_SA}" \
+    --role=roles/run.invoker \
+    --quiet
