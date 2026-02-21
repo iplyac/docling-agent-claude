@@ -58,7 +58,7 @@ Request (base64):
   "mime_type": "application/pdf",
   "output_format": "markdown",
   "options": {
-    "ocr": true,
+    "ocr": false,
     "extract_tables": true,
     "extract_images": false,
     "max_pages": null
@@ -81,6 +81,10 @@ Request (GCS):
   "output_format": "markdown"
 }
 ```
+
+**Processing options defaults:** `ocr` is `false` by default — pass `"ocr": true` explicitly for scanned PDFs or images. `extract_tables` is `true` by default.
+
+> **Breaking change:** `ocr` default changed from `true` to `false`. Callers processing scanned documents must now pass `"options": {"ocr": true}`.
 
 When using `gs://` URIs, the MIME type is auto-detected from GCS blob metadata. The `mime_type` field acts as a fallback if GCS metadata is missing.
 

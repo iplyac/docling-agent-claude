@@ -60,11 +60,15 @@ The system SHALL support `markdown`, `json`, and `text` output formats, with `ma
 ### Requirement: Configurable processing options
 The system SHALL accept optional processing parameters to control Docling behavior.
 
-#### Scenario: OCR enabled by default
+#### Scenario: OCR disabled by default
 - **WHEN** a request is sent without specifying `options.ocr`
+- **THEN** the system SHALL process the document without OCR
+
+#### Scenario: OCR enabled explicitly
+- **WHEN** a request is sent with `options.ocr: true`
 - **THEN** the system SHALL process the document with OCR enabled
 
-#### Scenario: OCR disabled
+#### Scenario: OCR disabled explicitly
 - **WHEN** a request is sent with `options.ocr: false`
 - **THEN** the system SHALL skip OCR processing
 

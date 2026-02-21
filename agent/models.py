@@ -15,7 +15,7 @@ class OutputFormat(str, Enum):
 class ProcessingOptions(BaseModel):
     """Options controlling Docling processing behavior."""
 
-    ocr: bool = True
+    ocr: bool = False
     extract_tables: bool = True
     extract_images: bool = False
     max_pages: Optional[int] = None
