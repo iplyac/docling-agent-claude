@@ -12,6 +12,11 @@ mock_converter_class = MagicMock()
 mock_docling.document_converter.DocumentConverter = mock_converter_class
 sys.modules["docling"] = mock_docling
 sys.modules["docling.document_converter"] = mock_docling.document_converter
+sys.modules["docling.backend"] = MagicMock()
+sys.modules["docling.backend.docling_parse_v4_backend"] = MagicMock()
+sys.modules["docling.datamodel"] = MagicMock()
+sys.modules["docling.datamodel.pipeline_options"] = MagicMock()
+sys.modules["docling.datamodel.base_models"] = MagicMock()
 
 # Mock GCS and google.api_core.exceptions before any imports
 # The exceptions module must be a real module with real Exception subclasses

@@ -58,7 +58,7 @@ The system SHALL support `markdown`, `json`, and `text` output formats, with `ma
 - **THEN** the system SHALL return status `"error"` with HTTP 400
 
 ### Requirement: Configurable processing options
-The system SHALL accept optional processing parameters to control Docling behavior.
+The system SHALL accept optional processing parameters to control Docling behavior, and SHALL pass these parameters to the Docling conversion pipeline so they take effect.
 
 #### Scenario: OCR disabled by default
 - **WHEN** a request is sent without specifying `options.ocr`
@@ -75,6 +75,10 @@ The system SHALL accept optional processing parameters to control Docling behavi
 #### Scenario: Table extraction enabled by default
 - **WHEN** a request is sent without specifying `options.extract_tables`
 - **THEN** the system SHALL extract and structure tables found in the document
+
+#### Scenario: Table extraction disabled
+- **WHEN** a request is sent with `options.extract_tables: false`
+- **THEN** the system SHALL skip table structure extraction
 
 #### Scenario: Page limit
 - **WHEN** a request is sent with `options.max_pages: N`

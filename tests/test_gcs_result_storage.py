@@ -143,7 +143,9 @@ class TestProcessorFlowWithStorage:
 
         p = DoclingProcessor()
         p._storage_client = mock_client
-        p.converter.convert = MagicMock(return_value=mock_docling_result)
+        mock_converter = MagicMock()
+        mock_converter.convert.return_value = mock_docling_result
+        p._build_converter = MagicMock(return_value=mock_converter)
 
         resp = await p._run_conversion(
             "/tmp/doc.pdf",
@@ -166,7 +168,9 @@ class TestProcessorFlowWithStorage:
         mock_docling_result = self._make_mock_result()
 
         p = DoclingProcessor()
-        p.converter.convert = MagicMock(return_value=mock_docling_result)
+        mock_converter = MagicMock()
+        mock_converter.convert.return_value = mock_docling_result
+        p._build_converter = MagicMock(return_value=mock_converter)
 
         resp = await p._run_conversion(
             "/tmp/doc.pdf",

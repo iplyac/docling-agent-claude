@@ -28,8 +28,11 @@ def processor():
     mock_result.document = mock_doc
     mock_result.pages = [MagicMock()]  # 1 page
 
-    proc.converter = MagicMock()
-    proc.converter.convert.return_value = mock_result
+    mock_converter = MagicMock()
+    mock_converter.convert.return_value = mock_result
+    # Patch _build_converter to return the mock; expose as proc.converter for test assertions
+    proc._build_converter = MagicMock(return_value=mock_converter)
+    proc.converter = mock_converter
     return proc
 
 

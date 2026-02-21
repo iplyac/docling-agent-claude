@@ -12,7 +12,10 @@ from urllib.parse import urlparse
 
 from google.cloud import storage
 from google.api_core import exceptions as gcs_exceptions
-from docling.document_converter import DocumentConverter
+from docling.backend.docling_parse_v4_backend import DoclingParseV4DocumentBackend
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
 
 from agent.config import get_max_document_size, get_processing_timeout, get_result_bucket
 from agent.models import DocumentMetadata, DocumentResponse, OutputFormat, ProcessingOptions
@@ -60,7 +63,6 @@ class DoclingProcessor:
     """Processes documents using the Docling library."""
 
     def __init__(self):
-        self.converter = DocumentConverter()
         result_bucket = get_result_bucket()
         if result_bucket:
             self._result_bucket = result_bucket
@@ -68,6 +70,21 @@ class DoclingProcessor:
         else:
             self._result_bucket = None
             self._storage_client = None
+
+    def _build_converter(self, options: ProcessingOptions) -> DocumentConverter:
+        """Build a DocumentConverter configured with the given processing options."""
+        pdf_options = PdfPipelineOptions(
+            do_ocr=options.ocr,
+            do_table_structure=options.extract_tables,
+        )
+        return DocumentConverter(
+            format_options={
+                InputFormat.PDF: PdfFormatOption(
+                    pipeline_options=pdf_options,
+                    backend=DoclingParseV4DocumentBackend,
+                )
+            }
+        )
 
     def _derive_result_filename(self, source: str, output_format: OutputFormat) -> str:
         """Derive result filename from document source."""
@@ -98,14 +115,13 @@ class DoclingProcessor:
             logger.error("GCS result upload failed: %s", e)
             return None
 
-    def _convert_sync(
-        self, source: str, max_pages: Optional[int] = None
-    ):
+    def _convert_sync(self, source: str, options: ProcessingOptions):
         """Run Docling conversion synchronously (called in executor)."""
+        converter = self._build_converter(options)
         kwargs = {}
-        if max_pages is not None:
-            kwargs["max_num_pages"] = max_pages
-        return self.converter.convert(source, **kwargs)
+        if options.max_pages is not None:
+            kwargs["max_num_pages"] = options.max_pages
+        return converter.convert(source, **kwargs)
 
     def _format_output(self, result, output_format: OutputFormat) -> str:
         """Convert Docling result to the requested output format."""
@@ -305,7 +321,7 @@ class DoclingProcessor:
             loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
                 loop.run_in_executor(
-                    None, self._convert_sync, source, options.max_pages
+                    None, self._convert_sync, source, options
                 ),
                 timeout=timeout,
             )

@@ -39,7 +39,7 @@ def test_document_request_defaults():
     req = DocumentRequest(document_url="https://example.com/doc.pdf")
     assert req.mime_type == "application/pdf"
     assert req.output_format == OutputFormat.markdown
-    assert req.options.ocr is True
+    assert req.options.ocr is False
     assert req.options.extract_tables is True
     assert req.options.extract_images is False
     assert req.options.max_pages is None
