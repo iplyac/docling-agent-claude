@@ -1,15 +1,24 @@
 steps:
-  # Step 1: Build Docker image
+  # Step 1: Pull previous image for layer caching (failure is non-fatal)
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - 'docker pull gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest || true'
+
+  # Step 2: Build Docker image with layer cache from previous build
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
+      - '--cache-from'
+      - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
       - '-t'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:latest'
       - '-t'
       - 'gcr.io/$PROJECT_ID/${_SERVICE_NAME}:$SHORT_SHA'
       - '.'
 
-  # Step 2: Push image to Container Registry
+  # Step 3: Push image to Container Registry
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'push'
