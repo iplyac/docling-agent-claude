@@ -47,6 +47,7 @@ openspec/               # Specifications and change history
 |--------|-------------------------|--------------------------|
 | GET    | /health                 | Health check             |
 | GET    | /healthz                | Health check (alias)     |
+| GET    | /status                 | Service status (version, uptime) |
 | POST   | /api/process-document   | Process a document       |
 
 ### POST /api/process-document
