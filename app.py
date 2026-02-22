@@ -1,7 +1,9 @@
 import logging
+import pathlib
 import sys
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -70,6 +72,11 @@ async def lifespan(app: FastAPI):
 
     processor = DoclingProcessor()
     app.state.processor = processor
+    app.state.started_at = datetime.now(timezone.utc)
+    try:
+        app.state.version = pathlib.Path("VERSION").read_text().strip()
+    except FileNotFoundError:
+        app.state.version = "unknown"
 
     yield
 
@@ -99,6 +106,19 @@ async def health():
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@app.get("/status")
+async def service_status(request: Request):
+    """Service status endpoint."""
+    uptime = (datetime.now(timezone.utc) - request.app.state.started_at).total_seconds()
+    return {
+        "name": "docling-agent",
+        "purpose": "Document processor — converts PDF/DOCX/PPTX/HTML to structured text using Docling",
+        "version": request.app.state.version,
+        "uptime_seconds": uptime,
+        "status": "ok",
+    }
 
 
 @app.post("/api/process-document")
